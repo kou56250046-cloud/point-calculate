@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ミニゲーム チーム戦</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0d18; --bg2:#13152a;
+  --panel:rgba(255,255,255,.05); --panel2:rgba(255,255,255,.09); --line:rgba(255,255,255,.10);
+  --txt:#f3f1ea; --muted:#9a9bb5;
+  --gold:#f5c451; --danger:#ff5d6c;
+  --t0:#ff5d5d; --t1:#2dd4a7; --t2:#5b9dff; --t3:#ffa53d; --t4:#b975ff;
+  --r:18px; --shadow:0 18px 48px -18px rgba(0,0,0,.75);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+html,body{min-height:100vh;overflow-x:hidden;}
+body{
+  font-family:'Zen Kaku Gothic New',sans-serif;color:var(--txt);
+  background:
+    radial-gradient(900px 500px at 10% -5%, rgba(245,196,81,.11),transparent 55%),
+    radial-gradient(700px 500px at 92% 5%, rgba(91,157,255,.13),transparent 55%),
+    radial-gradient(700px 600px at 50% 110%, rgba(185,117,255,.10),transparent 55%),
+    linear-gradient(170deg,var(--bg),var(--bg2));
+  padding-bottom:100px;
+}
+body::after{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.04;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+.wrap{max-width:560px;margin:0 auto;padding:0 15px;position:relative;z-index:2;}
+
+/* header */
+header{padding:26px 0 10px;text-align:center;}
+.kicker{font-family:'Bebas Neue';letter-spacing:.32em;color:var(--gold);font-size:13px;}
+h1{font-weight:900;font-size:24px;margin-top:3px;}
+
+/* sections */
+section{display:none;animation:fadeUp .3s ease;}
+section.active{display:block;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(9px);}to{opacity:1;transform:none;}}
+
+/* cards */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius,var(--r));box-shadow:var(--shadow);}
+.card+.card,.card+.gap,.gap+.card{margin-top:12px;}
+.gap{height:12px;}
+
+/* ── RANK ── */
+.rank-header{display:flex;align-items:center;justify-content:space-between;margin:8px 2px 12px;}
+.rank-header .ht{font-family:'Bebas Neue';letter-spacing:.14em;font-size:18px;color:var(--muted);}
+.total-badge{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.08em;}
+.rankrow{
+  display:flex;align-items:center;gap:12px;padding:15px 16px;margin-bottom:10px;
+  position:relative;overflow:hidden;border-radius:var(--r);
+  background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);
+  transition:background .3s;
+}
+.rankrow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--tc);}
+.rankrow.top1{background:linear-gradient(90deg,rgba(245,196,81,.12),var(--panel));border-color:rgba(245,196,81,.35);}
+.rankrow.top1 .pos{color:var(--gold);text-shadow:0 0 16px rgba(245,196,81,.6);}
+.rankrow .pos{font-family:'Bebas Neue';font-size:32px;line-height:1;width:38px;text-align:center;color:rgba(255,255,255,.3);}
+.rankrow .meta{flex:1;min-width:0;}
+.rankrow .tname{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px;}
+.rankrow .breakdown{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5;}
+.breakdown span{display:inline-block;margin-right:6px;}
+.rankrow .total{font-family:'Bebas Neue';font-size:42px;line-height:.9;text-align:right;min-width:70px;}
+.rankrow .total small{font-family:'Zen Kaku Gothic New';font-size:9px;font-weight:700;letter-spacing:.2em;color:var(--muted);display:block;text-align:right;}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--tc);box-shadow:0 0 8px var(--tc);flex:none;}
+
+.reveal-btn{width:100%;padding:17px;border:none;border-radius:var(--r);margin-top:4px;
+  font-family:'Zen Kaku Gothic New';font-weight:900;font-size:16px;letter-spacing:.08em;cursor:pointer;
+  background:linear-gradient(115deg,var(--gold),#ffe89a 48%,var(--gold));color:#1a1402;
+  box-shadow:0 12px 30px -10px rgba(245,196,81,.7);transition:transform .15s, box-shadow .15s;}
+.reveal-btn:active{transform:scale(.97);box-shadow:none;}
+
+/* ── INPUT ── */
+.chips{display:flex;gap:7px;overflow-x:auto;padding:4px 2px 13px;scrollbar-width:none;}
+.chips::-webkit-scrollbar{display:none;}
+.chip{flex:none;padding:9px 14px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer;
+  transition:.2s;white-space:nowrap;}
+.chip.on{background:var(--gold);color:#1a1402;border-color:transparent;box-shadow:0 7px 18px -7px rgba(245,196,81,.7);}
+
+.gamepanel{display:none;}
+.gamepanel.on{display:block;animation:fadeUp .3s ease;}
+.gtop{display:flex;align-items:center;gap:10px;padding:18px 18px 4px;}
+.gtop .ico{font-size:24px;}
+.gtop h2{font-size:17px;font-weight:900;}
+.gdesc{color:var(--muted);font-size:12px;padding:4px 18px 14px;line-height:1.65;}
+.divider{height:1px;background:var(--line);margin:0 16px;}
+
+.teamrow{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);}
+.teamrow:last-child{border-bottom:none;}
+.teamrow .tn{flex:1;font-weight:700;font-size:15px;display:flex;align-items:center;gap:9px;}
+.stepper{display:flex;align-items:center;background:rgba(0,0,0,.28);border-radius:12px;border:1px solid var(--line);overflow:hidden;}
+.stepper button{width:44px;height:44px;border:none;background:transparent;color:var(--txt);font-size:20px;font-weight:700;cursor:pointer;line-height:1;}
+.stepper button:active{background:var(--panel2);}
+.stepper .val{width:64px;height:44px;border:none;background:transparent;color:var(--txt);
+  font-family:'Bebas Neue';font-size:22px;text-align:center;}
+.stepper .val:focus{outline:none;}
+
+/* game score subtotals on rank per game */
+.game-pts{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;}
+.gpill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--panel2);color:var(--muted);}
+.gpill.has{color:var(--txt);}
+
+/* ── SETTINGS ── */
+.sblock{padding:16px 18px;}
+.sblock h3{font-family:'Bebas Neue';letter-spacing:.16em;font-size:16px;color:var(--gold);margin-bottom:14px;}
+.srow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);}
+.srow:first-of-type{border-top:none;}
+.srow .lbl{flex:1;font-size:14px;font-weight:700;display:flex;align-items:center;gap:9px;}
+.txtin{flex:1;height:42px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.25);
+  color:var(--txt);padding:0 14px;font-family:inherit;font-size:14px;font-weight:700;}
+.txtin:focus{outline:none;border-color:var(--gold);}
+.resetbtn{width:100%;padding:14px;border-radius:13px;border:1px solid rgba(255,93,108,.4);
+  background:rgba(255,93,108,.07);color:var(--danger);font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;}
+
+/* ── RULES ── */
+.rules-intro{padding:14px 18px 6px;color:var(--muted);font-size:12.5px;line-height:1.7;}
+.rulecard{margin-bottom:12px;overflow:hidden;}
+.rulecard-head{display:flex;align-items:center;gap:12px;padding:16px 18px 10px;}
+.rulecard-head .rico{font-size:26px;}
+.rulecard-head .rtitle{flex:1;}
+.rulecard-head .rtitle h3{font-size:16px;font-weight:900;margin-bottom:3px;}
+.rbadge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.06em;}
+.rbadge.plus{background:rgba(45,212,167,.18);color:#2dd4a7;border:1px solid rgba(45,212,167,.35);}
+.rbadge.minus{background:rgba(255,93,108,.16);color:#ff5d6c;border:1px solid rgba(255,93,108,.3);}
+.rbadge.both{background:rgba(245,196,81,.15);color:var(--gold);border:1px solid rgba(245,196,81,.3);}
+.rule-formula{margin:0 16px 14px;padding:12px 16px;border-radius:12px;
+  background:rgba(0,0,0,.28);border:1px solid var(--line);}
+.rule-formula .fml{font-family:'Bebas Neue';font-size:17px;letter-spacing:.06em;line-height:1.5;}
+.rule-formula .fml .plus-c{color:#2dd4a7;} .rule-formula .fml .minus-c{color:#ff5d6c;}
+.rule-formula .fdesc{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.65;}
+.rule-note{margin:0 16px 14px;padding:10px 14px;border-radius:10px;
+  background:rgba(245,196,81,.08);border-left:3px solid var(--gold);font-size:11.5px;color:var(--muted);line-height:1.6;}
+.rule-note strong{color:var(--gold);}
+
+/* ── NAV ── */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:20;
+  display:flex;justify-content:center;padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+  background:linear-gradient(0deg,rgba(12,13,24,.95) 50%,transparent);}
+.navinner{display:flex;gap:4px;background:rgba(18,20,40,.88);border:1px solid var(--line);
+  border-radius:18px;padding:5px;backdrop-filter:blur(16px);box-shadow:var(--shadow);}
+.navinner button{border:none;background:transparent;color:var(--muted);
+  padding:8px 13px;border-radius:13px;cursor:pointer;font-family:inherit;font-weight:700;font-size:11px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;transition:.2s;min-width:60px;}
+.navinner button .ni{font-size:17px;}
+.navinner button.on{background:var(--panel2);color:var(--gold);}
+
+/* ── REVEAL ── */
+#overlay{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;
+  align-items:center;justify-content:center;overflow:auto;padding:20px 0;
+  background:radial-gradient(800px 600px at 50% 30%,rgba(245,196,81,.14),rgba(8,9,18,.96));
+  backdrop-filter:blur(6px);}
+#overlay.show{display:flex;}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;}
+.revealbox{position:relative;width:92%;max-width:480px;text-align:center;}
+.rcount{font-family:'Bebas Neue';font-size:130px;color:var(--gold);line-height:1;
+  text-shadow:0 0 50px rgba(245,196,81,.6);animation:pop .9s ease;}
+@keyframes pop{0%{transform:scale(.3);opacity:0;}45%{transform:scale(1.12);}100%{transform:scale(1);opacity:1;}}
+.champbox{display:none;}
+.champbox.show{display:block;animation:fadeUp .6s ease;}
+.crown{font-size:50px;animation:float 2.2s ease-in-out infinite;}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-9px);}}
+.champ-lbl{font-family:'Bebas Neue';letter-spacing:.3em;color:var(--gold);font-size:15px;margin-top:4px;}
+.champ-name{font-size:38px;font-weight:900;margin:6px 0 4px;}
+.champ-score{font-family:'Bebas Neue';font-size:66px;color:var(--gold);line-height:.95;}
+.champ-score small{font-family:'Zen Kaku Gothic New';font-size:11px;letter-spacing:.2em;color:var(--muted);font-weight:700;display:block;margin-top:4px;}
+
+.r-podium{margin:22px 0 8px;display:flex;flex-direction:column;gap:8px;text-align:left;}
+.rpr{display:flex;align-items:center;gap:12px;padding:12px 15px;border-radius:14px;
+  background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--tc);}
+.rpr .rp-pos{font-family:'Bebas Neue';font-size:22px;width:26px;color:var(--muted);}
+.rpr .rp-name{flex:1;font-weight:700;display:flex;align-items:center;gap:8px;}
+.rpr .rp-score{font-family:'Bebas Neue';font-size:26px;color:var(--gold);}
+.closebtn{margin-top:14px;padding:13px 30px;border-radius:13px;border:1px solid var(--line);
+  background:var(--panel);color:var(--txt);font-weight:700;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">YOUTH GAME BATTLE</div>
+    <h1>ミニゲーム チーム戦</h1>
+  </header>
+
+  <!-- RANK -->
+  <section id="scr-rank" class="active">
+    <div class="rank-header">
+      <span class="ht">LIVE RANKING</span>
+      <span class="total-badge">5チーム × 5種目</span>
+    </div>
+    <div id="ranklist"></div>
+    <button class="reveal-btn" onclick="startReveal()">🏆 結果発表をはじめる</button>
+    <div class="gap"></div>
+  </section>
+
+  <!-- INPUT -->
+  <section id="scr-input">
+    <div class="chips" id="chips"></div>
+    <div class="card">
+      <div class="gamepanel on" data-g="0">
+        <div class="gtop"><span class="ico">🧩</span><h2>共通点探しゲーム</h2></div>
+        <div class="gdesc">チームで見つけた共通点の数・出来映えをもとに得点を入力してください。</div>
+        <div id="gteams-0"></div>
+      </div>
+      <div class="gamepanel" data-g="1">
+        <div class="gtop"><span class="ico">🃏</span><h2>トランプ合計数字</h2></div>
+        <div class="gdesc">5枚のトランプ合計数字をもとに得点を入力してください。</div>
+        <div id="gteams-1"></div>
+      </div>
+      <div class="gamepanel" data-g="2">
+        <div class="gtop"><span class="ico">⏱️</span><h2>しりとり</h2></div>
+        <div class="gdesc">結果・順位をもとに各チームの得点を入力してください。</div>
+        <div id="gteams-2"></div>
+      </div>
+      <div class="gamepanel" data-g="3">
+        <div class="gtop"><span class="ico">⚔️</span><h2>黒ひげ危機一髪</h2></div>
+        <div class="gdesc">結果・順位をもとに各チームの得点を入力してください。</div>
+        <div id="gteams-3"></div>
+      </div>
+      <div class="gamepanel" data-g="4">
+        <div class="gtop"><span class="ico">🟫</span><h2>ジェンガ</h2></div>
+        <div class="gdesc">結果・順位をもとに各チームの得点を入力してください。</div>
+        <div id="gteams-4"></div>
+      </div>
+    </div>
+    <div class="gap"></div>
+  </section>
+
+  <!-- RULES -->
+  <section id="scr-rules">
+    <p class="rules-intro">各種目の得点ルールをまとめています。入力画面で得点を入力する際の参考にしてください。</p>
+
+    <div class="card rulecard">
+      <div class="rulecard-head">
+        <span class="rico">🧩</span>
+        <div class="rtitle"><h3>共通点探しゲーム</h3><span class="rbadge both">加点 ＋ ボーナス</span></div>
+      </div>
+      <div class="rule-formula">
+        <div class="fml"><span class="plus-c">＋ 共通点の個数</span>　（基本加点）</div>
+        <div class="fdesc">チームで見つけた共通点を1つにつき1点加点します。</div>
+      </div>
+      <div class="rule-note"><strong>🌟 ボーナス：</strong>珍しい・面白い共通点はボーナス加点あり。司会者が裁量で追加点を入力してください。</div>
+    </div>
+
+    <div class="card rulecard">
+      <div class="rulecard-head">
+        <span class="rico">🃏</span>
+        <div class="rtitle"><h3>トランプ数字合計</h3><span class="rbadge plus">加点のみ</span></div>
+      </div>
+      <div class="rule-formula">
+        <div class="fml"><span class="plus-c">＋ メンバー全員のトランプ合計値</span></div>
+        <div class="fdesc">各メンバーが引いた1枚のトランプの数字を全員分合計した値を、そのまま得点として入力します。A=1、J=11、Q=12、K=13。</div>
+      </div>
+    </div>
+
+    <div class="card rulecard">
+      <div class="rulecard-head">
+        <span class="rico">⏱️</span>
+        <div class="rtitle"><h3>しりとり</h3><span class="rbadge minus">敗者のみ減点</span></div>
+      </div>
+      <div class="rule-formula">
+        <div class="fml">敗者チームに <span class="minus-c">－ 続いた単語数 × 0.5</span></div>
+        <div class="fdesc">タイマーが鳴った時点で止めてしまったチームが減点対象。長く続いた末に負けるほど大きなダメージになります。他のチームは 0 点のまま。</div>
+      </div>
+      <div class="rule-note"><strong>例：</strong>30単語続いてから負けた場合 → <strong>−15点</strong></div>
+    </div>
+
+    <div class="card rulecard">
+      <div class="rulecard-head">
+        <span class="rico">⚔️</span>
+        <div class="rtitle"><h3>黒ひげ危機一髪</h3><span class="rbadge minus">敗者のみ減点</span></div>
+      </div>
+      <div class="rule-formula">
+        <div class="fml">敗者チームに <span class="minus-c">－ 飛んだ時の剣の本数</span></div>
+        <div class="fdesc">黒ひげが飛んだ瞬間に刺さっていた剣の本数をそのまま減点。多く刺さってから飛ばすほど痛い。他のチームは 0 点のまま。</div>
+      </div>
+      <div class="rule-note"><strong>例：</strong>剣が14本刺さった状態で飛んだ場合 → <strong>−14点</strong></div>
+    </div>
+
+    <div class="card rulecard">
+      <div class="rulecard-head">
+        <span class="rico">🟫</span>
+        <div class="rtitle"><h3>ジェンガ</h3><span class="rbadge minus">敗者のみ減点</span></div>
+      </div>
+      <div class="rule-formula">
+        <div class="fml">敗者チームに <span class="minus-c">－ 倒した時の抜けブロック数</span></div>
+        <div class="fdesc">タワーが倒れた時点で抜けていたブロックの総数をそのまま減点。高く積み上げてから倒すほど大ダメージ。他のチームは 0 点のまま。</div>
+      </div>
+      <div class="rule-note"><strong>例：</strong>28個抜いた状態で倒した場合 → <strong>−28点</strong></div>
+    </div>
+    <div class="gap"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="scr-set">
+    <div class="card sblock">
+      <h3>チーム名</h3>
+      <div id="teamSettings"></div>
+    </div>
+    <div class="gap"></div>
+    <div class="card sblock">
+      <h3>データ管理</h3>
+      <button class="resetbtn" onclick="resetAll()">すべての得点をリセット</button>
+    </div>
+    <div class="gap"></div>
+  </section>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="navinner">
+    <button data-s="rank" class="on" onclick="go('rank')"><span class="ni">🏆</span>順位</button>
+    <button data-s="input" onclick="go('input')"><span class="ni">🎯</span>入力</button>
+    <button data-s="rules" onclick="go('rules')"><span class="ni">📋</span>配点</button>
+    <button data-s="set" onclick="go('set')"><span class="ni">⚙️</span>設定</button>
+  </div>
+</nav>
+
+<!-- REVEAL -->
+<div id="overlay">
+  <canvas id="confetti"></canvas>
+  <div class="revealbox">
+    <div id="rcount" class="rcount">3</div>
+    <div id="champbox" class="champbox">
+      <div class="crown">👑</div>
+      <div class="champ-lbl">CHAMPION</div>
+      <div class="champ-name" id="cName"></div>
+      <div class="champ-score" id="cScore"></div>
+      <div class="r-podium" id="rPodium"></div>
+      <button class="closebtn" onclick="closeReveal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── data ── */
+const GAMES=[
+  {emoji:'🧩',name:'共通点探し'},
+  {emoji:'🃏',name:'トランプ'},
+  {emoji:'⏱️',name:'しりとり'},
+  {emoji:'⚔️',name:'黒ひげ'},
+  {emoji:'🟫',name:'ジェンガ'},
+];
+const COLORS=['var(--t0)','var(--t1)','var(--t2)','var(--t3)','var(--t4)'];
+const KEY='ygb2_v1';
+
+function defaultState(){
+  return {
+    teams:[{name:'チーム1'},{name:'チーム2'},{name:'チーム3'},{name:'チーム4'},{name:'チーム5'}],
+    scores: Array.from({length:5},()=>Array(5).fill(0))
+    // scores[gameIdx][teamIdx]
+  };
+}
+let S=defaultState();
+
+/* ── storage ── */
+async function load(){
+  try{ if(window.storage){ const r=await window.storage.get(KEY,false); if(r?.value){ S=JSON.parse(r.value); return; }} }catch(e){}
+  try{ const v=localStorage.getItem(KEY); if(v) S=JSON.parse(v); }catch(e){}
+}
+let _st;
+function save(){ clearTimeout(_st); _st=setTimeout(async()=>{
+  const s=JSON.stringify(S);
+  try{ if(window.storage) await window.storage.set(KEY,s,false); }catch(e){}
+  try{ localStorage.setItem(KEY,s); }catch(e){}
+},200);}
+
+/* ── compute ── */
+function total(ti){ return S.scores.reduce((s,g)=>s+(Number(g[ti])||0),0); }
+function ranked(){ return S.teams.map((_,i)=>i).sort((a,b)=>total(b)-total(a)); }
+
+/* ── render rank ── */
+function renderRank(){
+  const order=ranked();
+  const el=document.getElementById('ranklist'); el.innerHTML='';
+  order.forEach((ti,rank)=>{
+    const div=document.createElement('div');
+    div.className='rankrow'+(rank===0?' top1':'');
+    div.style.setProperty('--tc',COLORS[ti]);
+    const tot=total(ti);
+    const breakdown=GAMES.map((g,gi)=>{
+      const v=Number(S.scores[gi][ti])||0;
+      return `<span class="gpill${v?' has':''}">${g.emoji}${v}</span>`;
+    }).join('');
+    div.innerHTML=`
+      <div class="pos">${rank+1}</div>
+      <div class="meta">
+        <div class="tname"><span class="dot"></span>${esc(S.teams[ti].name)}</div>
+        <div class="breakdown game-pts">${breakdown}</div>
+      </div>
+      <div class="total">${tot}<small>PT</small></div>`;
+    el.appendChild(div);
+  });
+}
+
+/* ── render inputs ── */
+function renderInputs(){
+  GAMES.forEach((_,gi)=>{
+    const el=document.getElementById(`gteams-${gi}`); if(!el) return;
+    el.innerHTML='';
+    S.teams.forEach((t,ti)=>{
+      const row=document.createElement('div'); row.className='teamrow';
+      const v=Number(S.scores[gi][ti])||0;
+      row.style.setProperty('--tc',COLORS[ti]);
+      row.innerHTML=`
+        <div class="tn"><span class="dot"></span>${esc(t.name)}</div>
+        <div class="stepper">
+          <button onclick="delta(${gi},${ti},-1)">−</button>
+          <input class="val" type="number" inputmode="numeric" value="${v}" onchange="setScore(${gi},${ti},this.value)" onfocus="this.select()">
+          <button onclick="delta(${gi},${ti},1)">＋</button>
+        </div>`;
+      el.appendChild(row);
+    });
+  });
+}
+
+function delta(gi,ti,d){
+  S.scores[gi][ti]=(Number(S.scores[gi][ti])||0)+d;
+  const el=document.querySelector(`#gteams-${gi} .teamrow:nth-child(${ti+1}) .val`);
+  if(el) el.value=S.scores[gi][ti];
+  save(); renderRank();
+}
+function setScore(gi,ti,v){
+  S.scores[gi][ti]=Number(v)||0;
+  save(); renderRank();
+}
+
+/* ── chips ── */
+function renderChips(){
+  const el=document.getElementById('chips'); el.innerHTML='';
+  GAMES.forEach((g,gi)=>{
+    const b=document.createElement('button');
+    b.className='chip'+(gi===0?' on':'');
+    b.textContent=`${g.emoji} ${g.name}`;
+    b.onclick=()=>{
+      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+      b.classList.add('on');
+      document.querySelectorAll('.gamepanel').forEach(p=>p.classList.toggle('on',p.dataset.g==gi));
+    };
+    el.appendChild(b);
+  });
+}
+
+/* ── settings ── */
+function renderTeamSettings(){
+  const el=document.getElementById('teamSettings'); el.innerHTML='';
+  S.teams.forEach((t,i)=>{
+    const row=document.createElement('div'); row.className='srow';
+    row.style.setProperty('--tc',COLORS[i]);
+    row.innerHTML=`<div class="lbl"><span class="dot"></span>チーム${i+1}</div>
+      <input class="txtin" style="flex:1" value="${escAttr(t.name)}" maxlength="14" onchange="renameTeam(${i},this.value)">`;
+    el.appendChild(row);
+  });
+}
+function renameTeam(i,v){ S.teams[i].name=v.trim()||`チーム${i+1}`; save(); renderInputs(); renderRank(); renderTeamSettings(); }
+function resetAll(){
+  if(!confirm('全種目の得点をリセットします（チーム名は残ります）。よろしいですか？')) return;
+  S.scores=Array.from({length:5},()=>Array(5).fill(0));
+  save(); renderInputs(); renderRank();
+}
+
+/* ── nav ── */
+function go(s){
+  document.querySelectorAll('section').forEach(el=>el.classList.remove('active'));
+  document.getElementById('scr-'+s).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+  if(s==='rank') renderRank();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ── reveal ── */
+let cRAF=null;
+function startReveal(){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('champbox').classList.remove('show');
+  document.getElementById('champbox').style.display='none';
+  const cd=document.getElementById('rcount'); cd.style.display='block';
+  let n=3; cd.textContent=n; cd.style.animation='none'; void cd.offsetWidth; cd.style.animation='pop .9s ease';
+  const t=setInterval(()=>{
+    n--;
+    if(n<=0){ clearInterval(t); cd.style.display='none'; showChamp(); }
+    else{ cd.textContent=n; cd.style.animation='none'; void cd.offsetWidth; cd.style.animation='pop .9s ease'; }
+  },1000);
+}
+function showChamp(){
+  const order=ranked();
+  const wi=order[0]; const wt=total(wi);
+  const cn=document.getElementById('cName');
+  cn.textContent=S.teams[wi].name;
+  cn.style.color=resolveCss(COLORS[wi]);
+  cn.style.textShadow=`0 0 28px ${resolveCss(COLORS[wi])}`;
+  document.getElementById('cScore').innerHTML=`${wt}<small>TOTAL POINT</small>`;
+  const pod=document.getElementById('rPodium'); pod.innerHTML='';
+  order.forEach((ti,rank)=>{
+    const d=document.createElement('div'); d.className='rpr';
+    d.style.setProperty('--tc',COLORS[ti]);
+    d.innerHTML=`<span class="rp-pos">${rank+1}</span>
+      <span class="rp-name"><span class="dot"></span>${esc(S.teams[ti].name)}</span>
+      <span class="rp-score">${total(ti)}</span>`;
+    pod.appendChild(d);
+  });
+  const cb=document.getElementById('champbox');
+  cb.style.display='block'; cb.classList.add('show');
+  fireConfetti();
+}
+function closeReveal(){ document.getElementById('overlay').classList.remove('show'); if(cRAF) cancelAnimationFrame(cRAF); }
+
+/* confetti */
+function fireConfetti(){
+  const c=document.getElementById('confetti'); const ctx=c.getContext('2d');
+  c.width=innerWidth; c.height=innerHeight;
+  const cols=['#f5c451','#ff5d5d','#2dd4a7','#5b9dff','#ffa53d','#b975ff','#fff'];
+  let ps=[]; for(let i=0;i<170;i++) ps.push({
+    x:Math.random()*c.width,y:-30-Math.random()*c.height*1.2,
+    r:3+Math.random()*6,vx:-2+Math.random()*4,vy:2.5+Math.random()*4,
+    rot:Math.random()*6.28,vr:(-.3+Math.random()*.6),col:cols[Math.random()*cols.length|0]
+  });
+  let f=0;
+  function loop(){ ctx.clearRect(0,0,c.width,c.height); f++;
+    ps.forEach(p=>{ p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr;p.vy+=.05;
+      if(p.y>c.height+30){p.y=-30;p.x=Math.random()*c.width;p.vy=2.5+Math.random()*4;}
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.col;
+      ctx.fillRect(-p.r/2,-p.r/2,p.r,p.r*1.7);ctx.restore();});
+    if(f<600) cRAF=requestAnimationFrame(loop); else ctx.clearRect(0,0,c.width,c.height);
+  }
+  loop();
+}
+
+function resolveCss(v){ const m=v.match(/var\(([^)]+)\)/); if(!m) return v;
+  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim(); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+
+/* ── init ── */
+(async()=>{
+  await load();
+  // migrate: ensure scores is 5×5
+  if(!S.scores||S.scores.length!==5) S.scores=Array.from({length:5},()=>Array(5).fill(0));
+  S.scores=S.scores.map(g=>{ while(g.length<5)g.push(0); return g.slice(0,5); });
+  if(!S.teams||S.teams.length!==5) S.teams=defaultState().teams;
+  renderChips(); renderInputs(); renderTeamSettings(); renderRank();
+})();
+</script>
+</body>
+</html>
