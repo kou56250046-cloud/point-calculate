@@ -238,16 +238,39 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:20;
 .rpr .rp-score{font-family:'Bebas Neue';font-size:26px;color:var(--gold);}
 .closebtn{margin-top:14px;padding:13px 30px;border-radius:13px;border:1px solid var(--line);
   background:var(--panel);color:var(--txt);font-weight:700;cursor:pointer;font-family:inherit;width:100%;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:calc(90px + env(safe-area-inset-bottom));
+  left:50%;transform:translateX(-50%) translateY(10px);
+  z-index:110;background:rgba(22,24,46,.97);color:var(--txt);
+  border:1px solid var(--line);border-radius:14px;
+  padding:11px 18px;font-size:13px;font-weight:700;
+  white-space:nowrap;opacity:0;transition:opacity .25s,transform .25s;
+  pointer-events:none;display:flex;align-items:center;gap:10px;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+.toast-action{color:var(--gold);background:none;border:none;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;flex:none;}
+
+/* ── HEADER ROW ── */
+.header-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;}
+.undo-btn{width:34px;height:34px;border-radius:9px;flex:none;
+  border:1px solid var(--line);background:var(--panel);
+  color:var(--muted);cursor:pointer;font-size:17px;
+  display:flex;align-items:center;justify-content:center;}
+.undo-btn:disabled{opacity:.25;cursor:not-allowed;}
+.undo-btn:not(:disabled):active{background:var(--panel2);}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="kicker">SCORE APP</div>
-    <button class="event-btn" onclick="openEventModal()">
-      <span class="event-btn-name" id="eventBtnName">―</span>
-      <span class="event-chevron">▾</span>
-    </button>
+    <div class="header-row">
+      <button class="event-btn" onclick="openEventModal()">
+        <span class="event-btn-name" id="eventBtnName">―</span>
+        <span class="event-chevron">▾</span>
+      </button>
+      <button class="undo-btn" id="undoBtn" onclick="undo()" disabled title="元に戻す">↩</button>
+    </div>
   </header>
 
   <!-- RANK -->
@@ -386,6 +409,12 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:20;
   </div>
 </div>
 
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span id="toastMsg"></span>
+  <button class="toast-action" id="toastAction" style="display:none"></button>
+</div>
+
 <script>
 /* ── constants ── */
 const KEY = 'ygb3_v1';
@@ -396,6 +425,7 @@ const COLORS = [
 
 /* ── uid ── */
 function uid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 }
 
@@ -429,7 +459,7 @@ function save() {
   _st = setTimeout(async () => {
     const s = JSON.stringify(S);
     try { if (window.storage) await window.storage.set(KEY, s, false); } catch(e) {}
-    try { localStorage.setItem(KEY, s); } catch(e) {}
+    try { localStorage.setItem(KEY, s); } catch(e) { showToast('⚠️ 保存失敗：ストレージ容量不足'); }
   }, 200);
 }
 
@@ -442,7 +472,13 @@ function setScoreVal(ev, gameId, teamId, val) {
   ev.scores[gameId][teamId] = val;
 }
 function total(ev, teamId) { return ev.games.reduce((s, g) => s + getScore(ev, g.id, teamId), 0); }
-function ranked(ev) { return [...ev.teams].sort((a, b) => total(ev, b.id) - total(ev, a.id)); }
+function ranked(ev) {
+  return [...ev.teams].sort((a, b) => {
+    const diff = total(ev, b.id) - total(ev, a.id);
+    if (diff !== 0) return diff;
+    return ev.teams.findIndex(t => t.id === a.id) - ev.teams.findIndex(t => t.id === b.id);
+  });
+}
 function colorOf(ev, teamId) { const i = ev.teams.findIndex(t => t.id === teamId); return COLORS[i % COLORS.length] || COLORS[0]; }
 
 /* ── render header ── */
@@ -464,7 +500,7 @@ function renderRank() {
     const tot = total(ev, team.id);
     const breakdown = ev.games.map(g => {
       const v = getScore(ev, g.id, team.id);
-      return `<span class="gpill${v !== 0 ? ' has' : ''}">${g.emoji}${v >= 0 ? '' : ''}${v}</span>`;
+      return `<span class="gpill${v !== 0 ? ' has' : ''}">${esc(g.emoji)}${v >= 0 ? '' : ''}${v}</span>`;
     }).join('');
     div.innerHTML = `
       <div class="pos">${rank + 1}</div>
@@ -504,7 +540,7 @@ function renderGamePanel() {
 
   const head = document.createElement('div');
   head.innerHTML = `
-    <div class="gtop"><span class="ico">${g.emoji}</span><h2>${esc(g.name)}</h2></div>
+    <div class="gtop"><span class="ico">${esc(g.emoji)}</span><h2>${esc(g.name)}</h2></div>
     <div class="gdesc">${esc(g.description || '得点を入力してください。').replace(/\n/g, '<br>')}</div>`;
   container.appendChild(head);
 
@@ -542,6 +578,7 @@ function renderGamePanel() {
 }
 
 function deltaScore(gameId, teamId, d, type) {
+  snapshot();
   const ev = current();
   let v = getScore(ev, gameId, teamId) + d;
   if (type === 'plus' && v < 0) v = 0;
@@ -553,6 +590,7 @@ function deltaScore(gameId, teamId, d, type) {
 }
 
 function inputScore(gameId, teamId, v, type) {
+  snapshot();
   if (type === 'plus' && v < 0) v = 0;
   if (type === 'minus' && v > 0) v = 0;
   setScoreVal(current(), gameId, teamId, v);
@@ -564,6 +602,11 @@ function applyRank(gameId, teamId, rank) {
   const g = ev.games.find(g => g.id === gameId);
   if (!g) return;
   if (!ev.rankSelections[gameId]) ev.rankSelections[gameId] = {};
+  if (rank > 0) {
+    const dup = ev.teams.find(t => t.id !== teamId && (ev.rankSelections[gameId] || {})[t.id] === rank);
+    if (dup) showToast(`⚠️ ${dup.name} に同じ順位が割り当て済みです`);
+  }
+  snapshot();
   ev.rankSelections[gameId][teamId] = rank;
   const score = rank > 0 ? (Number(g.rankTable[rank - 1]) || 0) : 0;
   setScoreVal(ev, gameId, teamId, score);
@@ -595,7 +638,7 @@ function renderRules() {
     }
     card.innerHTML = `
       <div class="rulecard-head">
-        <span class="rico">${g.emoji}</span>
+        <span class="rico">${esc(g.emoji)}</span>
         <div class="rtitle"><h3>${esc(g.name)}</h3>${badgeMap[g.type] || ''}</div>
       </div>
       ${g.description ? `<div class="rule-formula"><div class="fdesc">${esc(g.description).replace(/\n/g,'<br>')}</div></div>` : ''}
@@ -623,7 +666,7 @@ function renderTeamSettings() {
     const canDel = ev.teams.length > 2;
     row.innerHTML = `
       <div class="lbl"><span class="dot"></span></div>
-      <input class="txtin" value="${escAttr(t.name)}" maxlength="14" onchange="renameTeam('${t.id}',this.value)">
+      <input class="txtin" value="${esc(t.name)}" maxlength="14" onchange="renameTeam('${t.id}',this.value)">
       <button class="icon-btn del" onclick="${canDel ? `deleteTeam('${t.id}')` : ''}"
         style="opacity:${canDel ? 1 : 0.3};cursor:${canDel ? 'pointer' : 'not-allowed'}">✕</button>`;
     el.appendChild(row);
@@ -641,7 +684,7 @@ function renderGameSettings() {
     row.className = 'srow';
     const canDel = ev.games.length > 1;
     row.innerHTML = `
-      <div class="lbl">${g.emoji} ${esc(g.name)}</div>
+      <div class="lbl">${esc(g.emoji)} ${esc(g.name)}</div>
       <button class="icon-btn" onclick="openGameModal('${g.id}')">✎</button>
       <button class="icon-btn del" onclick="${canDel ? `deleteGame('${g.id}')` : ''}"
         style="opacity:${canDel ? 1 : 0.3};cursor:${canDel ? 'pointer' : 'not-allowed'}">✕</button>`;
@@ -653,6 +696,7 @@ function renderGameSettings() {
 
 /* ── team actions ── */
 function renameTeam(id, v) {
+  snapshot();
   const t = current().teams.find(t => t.id === id);
   if (t) t.name = v.trim() || t.name;
   save(); renderRank(); renderChips(); renderGamePanel();
@@ -661,6 +705,7 @@ function renameTeam(id, v) {
 function addTeam() {
   const ev = current();
   if (ev.teams.length >= 10) return;
+  snapshot();
   ev.teams.push(makeTeam(ev.teams.length + 1));
   save(); renderAll();
 }
@@ -670,6 +715,7 @@ function deleteTeam(id) {
   if (ev.teams.length <= 2) return;
   const t = ev.teams.find(t => t.id === id);
   if (!confirm(`チーム「${t?.name}」を削除します。スコアも消えます。よろしいですか？`)) return;
+  snapshot();
   ev.teams = ev.teams.filter(t => t.id !== id);
   for (const gid in ev.scores) { delete ev.scores[gid][id]; }
   for (const gid in ev.rankSelections) { delete ev.rankSelections[gid][id]; }
@@ -724,6 +770,7 @@ function saveGame() {
     ? [...document.querySelectorAll('.rank-pts')].map(inp => Number(inp.value) || 0)
     : [];
 
+  snapshot();
   if (_editingGameId) {
     const g = ev.games.find(g => g.id === _editingGameId);
     if (g) Object.assign(g, { emoji, name, description: desc, type: _editType, rankTable });
@@ -751,6 +798,7 @@ function deleteGame(id) {
   if (ev.games.length <= 1) return;
   const g = ev.games.find(g => g.id === id);
   if (!confirm(`種目「${g?.name}」を削除します。スコアも消えます。よろしいですか？`)) return;
+  snapshot();
   ev.games = ev.games.filter(g => g.id !== id);
   delete ev.scores[id];
   delete ev.rankSelections[id];
@@ -765,6 +813,7 @@ function addGame() {
 
 /* ── event actions ── */
 function renameEvent(v) {
+  snapshot();
   const ev = current();
   ev.name = v.trim() || ev.name;
   save(); renderHeader();
@@ -774,6 +823,7 @@ function deleteCurrentEvent() {
   if (S.events.length <= 1) return;
   const ev = current();
   if (!confirm(`イベント「${ev.name}」を削除します。すべてのデータが消えます。よろしいですか？`)) return;
+  snapshot();
   S.events = S.events.filter(e => e.id !== ev.id);
   S.activeEventId = S.events[0].id;
   _activeGameIdx = 0;
@@ -788,6 +838,7 @@ function switchEvent(id) {
 
 function addNewEvent() {
   if (S.events.length >= 10) return;
+  snapshot();
   const ev = makeEvent(`イベント${S.events.length + 1}`);
   S.events.push(ev);
   S.activeEventId = ev.id;
@@ -814,6 +865,7 @@ function closeEventModal() { document.getElementById('eventModal').classList.rem
 /* ── data management ── */
 function resetAll() {
   if (!confirm('このイベントの全スコアをリセットします（チーム・種目名は残ります）。よろしいですか？')) return;
+  snapshot();
   const ev = current();
   ev.scores = {}; ev.rankSelections = {};
   save(); renderRank(); renderGamePanel();
@@ -840,17 +892,18 @@ function renderAll() {
 }
 
 /* ── reveal ── */
-let cRAF = null;
+let cRAF = null, _revealInterval = null;
 function startReveal() {
+  clearInterval(_revealInterval);
   document.getElementById('overlay').classList.add('show');
   document.getElementById('champbox').classList.remove('show');
   document.getElementById('champbox').style.display = 'none';
   const cd = document.getElementById('rcount');
   cd.style.display = 'block';
   let n = 3; cd.textContent = n; cd.style.animation = 'none'; void cd.offsetWidth; cd.style.animation = 'pop .9s ease';
-  const t = setInterval(() => {
+  _revealInterval = setInterval(() => {
     n--;
-    if (n <= 0) { clearInterval(t); cd.style.display = 'none'; showChamp(); }
+    if (n <= 0) { clearInterval(_revealInterval); cd.style.display = 'none'; showChamp(); }
     else { cd.textContent = n; cd.style.animation = 'none'; void cd.offsetWidth; cd.style.animation = 'pop .9s ease'; }
   }, 1000);
 }
@@ -880,10 +933,11 @@ function showChamp() {
   fireConfetti();
 }
 
-function closeReveal() { document.getElementById('overlay').classList.remove('show'); if (cRAF) cancelAnimationFrame(cRAF); }
+function closeReveal() { document.getElementById('overlay').classList.remove('show'); clearInterval(_revealInterval); if (cRAF) cancelAnimationFrame(cRAF); }
 
 /* ── confetti ── */
 function fireConfetti() {
+  if (cRAF) cancelAnimationFrame(cRAF);
   const c = document.getElementById('confetti'); const ctx = c.getContext('2d');
   c.width = innerWidth; c.height = innerHeight;
   const cols = ['#f5c451','#ff5d5d','#2dd4a7','#5b9dff','#ffa53d','#b975ff','#fff'];
@@ -907,13 +961,61 @@ function fireConfetti() {
   loop();
 }
 
+/* ── toast ── */
+let _toastTimer = null;
+function showToast(msg, actionLabel, actionFn) {
+  clearTimeout(_toastTimer);
+  const toast = document.getElementById('toast');
+  const msgEl  = document.getElementById('toastMsg');
+  const actEl  = document.getElementById('toastAction');
+  msgEl.textContent = msg;
+  if (actionLabel && actionFn) {
+    actEl.textContent = actionLabel;
+    actEl.onclick = actionFn;
+    actEl.style.display = '';
+  } else {
+    actEl.style.display = 'none';
+    actEl.onclick = null;
+  }
+  toast.classList.add('show');
+  _toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+/* ── undo ── */
+let _undoStack = [];
+function snapshot() {
+  _undoStack.push(JSON.stringify(S));
+  if (_undoStack.length > 10) _undoStack.shift();
+  const btn = document.getElementById('undoBtn');
+  if (btn) btn.disabled = false;
+}
+function undo() {
+  if (!_undoStack.length) return;
+  S = JSON.parse(_undoStack.pop());
+  const btn = document.getElementById('undoBtn');
+  if (btn) btn.disabled = _undoStack.length === 0;
+  save(); renderAll();
+  showToast('元に戻しました');
+}
+
 /* ── utils ── */
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function escAttr(s) { return String(s).replace(/"/g, '&quot;'); }
 
 /* ── service worker ── */
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showToast('🔄 アプリが更新されました', 'リロード', () => location.reload());
+          }
+        });
+      });
+    });
+  });
 }
 
 /* ── init ── */
